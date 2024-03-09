@@ -21,16 +21,15 @@ func main() {
 		}
 	case "2":
 		{
-            var username string
+			var username string
 
-            fmt.Print("Enter username: ")
-            fmt.Scanf("%s", &username)
+			fmt.Print("Enter username: ")
+			fmt.Scanf("%s", &username)
 
-            client := modules.NewClient("localhost:3000", username)
-            log.Fatal(client.StartClient())
+			client := modules.NewClient("localhost:3000", username)
+			log.Fatal(client.StartClient())
 
 		}
-
 	}
 
 }

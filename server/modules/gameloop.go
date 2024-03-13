@@ -1,7 +1,6 @@
 package modules
 
 import (
-	"fmt"
 	"log"
 	"math/rand"
 	"strconv"
@@ -13,13 +12,13 @@ var zones map[int]Zone
 var gameUsers []GameUser
 
 type GameUser struct {
-	user   User
-	spells []Spell
-	lifes  int
+	user     User
+	upgrades []Upgrade
+	lifes    int
 }
 
-func (gu *GameUser) AddSpell(s Spell) {
-	gu.spells = append(gu.spells, s)
+func (gu *GameUser) AddUpgrade(u Upgrade) {
+	gu.upgrades = append(gu.upgrades, u)
 }
 
 func (gu *GameUser) Die() {
@@ -40,29 +39,42 @@ func (gu *GameUser) RemoveLife(points int) {
 }
 
 func (gu *GameUser) AddToZone(zid int) {
-    for i, z := range zones {
-        if i == zid {
-            z.users = append(z.users, *gu)
-        }
-    }
+	entry, ok := zones[zid]
+	if ok {
+		entry.users = append(entry.users, *gu)
+		zones[zid] = entry
+	}
 }
 
 type Zone struct {
-	users  []GameUser
-	spells []Spell
+	users   []GameUser
+	upgrade []Upgrade
 }
 
-func (z *Zone) RemoveItem(item Spell) {
-	for i, zi := range z.spells {
-		if zi == item {
-			z.spells = append(z.spells[:i], z.spells[i+1:]...)
+func (z *Zone) RemoveUpgrade(u Upgrade) {
+	for i, zi := range z.upgrade {
+		if zi == u {
+			z.upgrade = append(z.upgrade[:i], z.upgrade[i+1:]...)
 		}
 	}
 }
 
-type Spell struct {
-	defence int
-	attack  int
+func Fight(us []GameUser) {
+}
+
+func (z *Zone) ProcessZone() {
+	log.Println(z.upgrade)
+	if len(z.users) > 1 {
+		Fight(z.users)
+	}
+
+	z.users[0].user.conn.Write(ServerInfo{Status: "SELITEM", Upgrades: z.upgrade}.ToJson())
+
+}
+
+type Upgrade struct {
+	Defence int `json:"defence"`
+	Attack  int `json:"attack"`
 }
 
 type Selection struct {
@@ -84,7 +96,7 @@ func broadcast(bt []byte) {
 
 func checkForEnd(endch *chan (User)) {
 	for {
-		if len(users) == 1 {
+		if len(gameUsers) == 1 {
 			*endch <- users[0]
 		}
 	}
@@ -93,18 +105,14 @@ func checkForEnd(endch *chan (User)) {
 func generateZones() {
 	zones = make(map[int]Zone)
 
-	o := 0
-	for i := 0; i < len(gameUsers); i++ {
-		for y := 0; y < 2; y++ {
-			z := Zone{}
+	for i := 0; i < len(gameUsers)*2; i++ {
+		z := Zone{}
 
-			for j := 0; j < rand.Intn(5); j++ {
-				z.spells = append(z.spells, Spell{defence: rand.Intn(3), attack: rand.Intn(4)})
-			}
-
-			zones[y+i+o] = z
-			o += 1
+		for j := 0; j < rand.Intn(5); j++ {
+			z.upgrade = append(z.upgrade, Upgrade{Defence: rand.Intn(3), Attack: rand.Intn(4)})
 		}
+
+		zones[i] = z
 	}
 }
 
@@ -116,15 +124,15 @@ func waitForSel(gu GameUser, ch *chan (Selection)) {
 		log.Fatal(err)
 		return
 	}
-    sel := string(selBuf[:n])
-    sel = strings.ReplaceAll(sel, "\n", "")
+	sel := string(selBuf[:n])
+	sel = strings.ReplaceAll(sel, "\n", "")
 
 	i, err := strconv.Atoi(sel)
 
-    if err != nil {
-        log.Fatal(err)
-        return
-    }
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
 
 	*ch <- Selection{user: gu, selection: i}
 }
@@ -160,14 +168,17 @@ func StartLoop() {
 		go waitForSel(u, &selchan)
 	}
 
-    for i := 0; i < len(gameUsers); i++ {
-        sel := <-selchan
+	for i := 0; i < len(gameUsers); i++ {
+		sel := <-selchan
 		log.Printf("User %s selected zone %d\n", sel.user.user.username, sel.selection)
-        sel.user.AddToZone(sel.selection)
+		sel.user.AddToZone(sel.selection)
 	}
 
-    log.Println("FINISHED")
-    fmt.Printf("zones: %v\n", zones)
-
-
+	for i := range zones {
+		if len(zones[i].users) == 0 {
+			continue
+		}
+		z := zones[i]
+		go z.ProcessZone()
+	}
 }

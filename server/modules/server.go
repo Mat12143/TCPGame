@@ -10,10 +10,11 @@ import (
 var users []User
 
 type ServerInfo struct {
-	Status string `json:"status"`
-	Zones  int    `json:"zones"`
-	Winner string `json:"winner"`
-	Message string `json:"message"`
+	Status   string    `json:"status"`
+	Zones    int       `json:"zones"`
+	Winner   string    `json:"winner"`
+	Message  string    `json:"message"`
+	Upgrades []Upgrade `json:"upgrades"`
 }
 
 func (si ServerInfo) ToJson() []byte {
@@ -61,7 +62,6 @@ type Server struct {
 	address string
 	port    string
 	ln      net.Listener
-	qch     chan (struct{})
 }
 
 func NewServer(address, port string) *Server {
@@ -105,19 +105,19 @@ func (server *Server) acceptLoop() {
 
 		n, err := conn.Read(usernameBuf)
 
-        if err != nil {
-            log.Println(err)
-            conn.Close()
-            continue
-        }
+		if err != nil {
+			log.Println(err)
+			conn.Close()
+			continue
+		}
 
 		username := string(usernameBuf[:n])
-        username = strings.ReplaceAll(username, "\n", "")
+		username = strings.ReplaceAll(username, "\n", "")
 
 		_, res := NewUser(conn, username)
 
 		if res {
-            conn.Write(ServerInfo{ Status: "ERROR", Message: "Username already taken" }.ToJson())
+			conn.Write(ServerInfo{Status: "ERROR", Message: "Username already taken"}.ToJson())
 			conn.Close()
 			continue
 		}

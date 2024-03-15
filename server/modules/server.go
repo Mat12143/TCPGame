@@ -1,7 +1,6 @@
 package modules
 
 import (
-	"encoding/json"
 	"log"
 	"net"
 	"strings"
@@ -9,30 +8,7 @@ import (
 
 var users []User
 
-type ServerInfo struct {
-	Status   string    `json:"status"`
-	Zones    int       `json:"zones"`
-	Winner   string    `json:"winner"`
-	Message  string    `json:"message"`
-	Upgrades []Upgrade `json:"upgrades"`
-}
-
-func (si ServerInfo) ToJson() []byte {
-
-	r, err := json.Marshal(si)
-	if err != nil {
-		return []byte{}
-	}
-	return r
-}
-
-type User struct {
-	conn     net.Conn
-	username string
-}
-
 func NewUser(conn net.Conn, username string) (User, bool) {
-
 	for _, u := range users {
 		if u.username == username {
 			return User{}, true
@@ -46,24 +22,6 @@ func NewUser(conn net.Conn, username string) (User, bool) {
 	return u, false
 }
 
-func (user User) Disconnect() {
-	defer user.conn.Close()
-
-	for i, u := range users {
-		if u == user {
-			users = append(users[:i], users[i+1:]...)
-			break
-		}
-	}
-	log.Println("User", user.username, "disconnected!")
-}
-
-type Server struct {
-	address string
-	port    string
-	ln      net.Listener
-}
-
 func NewServer(address, port string) *Server {
 	return &Server{
 		address: address,
@@ -71,29 +29,10 @@ func NewServer(address, port string) *Server {
 	}
 }
 
-func (server *Server) Start() error {
-	ln, err := net.Listen("tcp", server.address+":"+server.port)
-	defer ln.Close()
-
-	if err != nil {
-		return err
-	}
-
-	log.Printf("Server listening on %s:%s\n", server.address, server.port)
-
-	server.ln = ln
-
-	go StartLoop()
-
-	server.acceptLoop()
-
-	return nil
-}
-
 func (server *Server) acceptLoop() {
 	for {
-
 		conn, err := server.ln.Accept()
+
 		if err != nil {
 			log.Println("Accept error: ", err)
 			continue
@@ -101,7 +40,7 @@ func (server *Server) acceptLoop() {
 
 		log.Println("New connection from ", conn.RemoteAddr())
 
-		usernameBuf := make([]byte, 2048)
+		usernameBuf := make([]byte, MAX_SIZE)
 
 		n, err := conn.Read(usernameBuf)
 
@@ -117,9 +56,25 @@ func (server *Server) acceptLoop() {
 		_, res := NewUser(conn, username)
 
 		if res {
-			conn.Write(ServerInfo{Status: "ERROR", Message: "Username already taken"}.ToJson())
+			resp := ServerCommunication{Status: "ERROR", Message: "Username already taken"}.ToJson()
+			conn.Write(resp)
+
 			conn.Close()
 			continue
 		}
+        log.Printf("New user entered the chat: %s\n", username)
 	}
+}
+
+func isConnDead(n int, err error) bool {
+
+    if err != nil {
+        return true
+    }
+
+    if n <= 0 {
+        return true
+    }
+
+    return false
 }

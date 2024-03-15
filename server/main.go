@@ -7,6 +7,6 @@ import (
 )
 
 func main() {
-	server := modules.NewServer("localhost", "3000")
+	server := modules.NewServer("0.0.0.0", "3000")
 	log.Fatal(server.Start())
 }

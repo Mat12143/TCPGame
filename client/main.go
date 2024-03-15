@@ -46,7 +46,7 @@ func parseZones(sd ServerData) {
 	zones = make(map[int]string)
 
 	for i := 0; i < sd.Zones; i++ {
-		zones[i] = fmt.Sprintf("Zone %d", i)
+		zones[i] = fmt.Sprintf("Zone %d", i+1)
 	}
 }
 
@@ -129,9 +129,9 @@ func (c *Client) StartClient() error {
 
 		case "ERROR":
 			fmt.Println(resp.Message)
+		case "WINNER":
+			fmt.Printf("Game Ended! The winner is %s", resp.Winner)
 		}
-
-		fmt.Printf("Attack: %d | Defence %d", stats.Attack, stats.Defence)
 	}
 	return nil
 }

@@ -5,11 +5,13 @@ import (
 	"math/rand"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
 var zones map[int]Zone
 var gameUsers []GameUser
+var wg sync.WaitGroup
 
 type GameUser struct {
 	user     User
@@ -60,16 +62,44 @@ func (z *Zone) RemoveUpgrade(u Upgrade) {
 }
 
 func Fight(us []GameUser) {
+	for _, u := range us {
+		u.user.conn.Write([]byte("Combat to be implemented"))
+	}
 }
 
-func (z *Zone) ProcessZone() {
-	log.Println(z.upgrade)
+func ProcessZone(i int) {
+	z := zones[i]
+	log.Println(zones)
+
+	defer wg.Done()
+	defer func() {
+		z.users = []GameUser{}
+		zones[i] = z
+	}()
+
 	if len(z.users) > 1 {
 		Fight(z.users)
+		return
 	}
-
 	z.users[0].user.conn.Write(ServerInfo{Status: "SELITEM", Upgrades: z.upgrade}.ToJson())
 
+	if len(z.upgrade) == 0 {
+		return
+	}
+
+	upBuf := make([]byte, 2048)
+
+	n, err := z.users[0].user.conn.Read(upBuf)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	upID := string(upBuf[:n])
+
+	ID, _ := strconv.Atoi(upID)
+
+	z.users[0].AddUpgrade(z.upgrade[ID])
 }
 
 type Upgrade struct {
@@ -160,25 +190,29 @@ func StartLoop() {
 	time.Sleep(5 * time.Second)
 	generateZones()
 
-	broadcast(ServerInfo{Status: "ZONES", Zones: len(zones)}.ToJson())
+	for {
+		log.Println("NEW TURN")
+		broadcast(ServerInfo{Status: "ZONES", Zones: len(zones)}.ToJson())
 
-	selchan := make(chan (Selection))
+		selchan := make(chan (Selection))
 
-	for _, u := range gameUsers {
-		go waitForSel(u, &selchan)
-	}
-
-	for i := 0; i < len(gameUsers); i++ {
-		sel := <-selchan
-		log.Printf("User %s selected zone %d\n", sel.user.user.username, sel.selection)
-		sel.user.AddToZone(sel.selection)
-	}
-
-	for i := range zones {
-		if len(zones[i].users) == 0 {
-			continue
+		for _, u := range gameUsers {
+			go waitForSel(u, &selchan)
 		}
-		z := zones[i]
-		go z.ProcessZone()
+
+		for i := 0; i < len(gameUsers); i++ {
+			sel := <-selchan
+			log.Printf("User %s selected zone %d\n", sel.user.user.username, sel.selection)
+			sel.user.AddToZone(sel.selection)
+		}
+
+		for i := range zones {
+			if len(zones[i].users) == 0 {
+				continue
+			}
+			wg.Add(1)
+			go ProcessZone(i)
+		}
+		wg.Wait()
 	}
 }

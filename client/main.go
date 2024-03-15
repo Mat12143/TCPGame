@@ -28,7 +28,18 @@ type Client struct {
 	username string
 }
 
+type Stats struct {
+	Attack  int
+	Defence int
+}
+
+func (s *Stats) add(u Upgrade) {
+	*&s.Attack += u.Attack
+	*&s.Defence += u.Defence
+}
+
 var zones map[int]string
+var zoneStrings map[int]string
 var zoneUpgrades []Upgrade
 
 func parseZones(sd ServerData) {
@@ -66,6 +77,8 @@ func (c *Client) StartClient() error {
 		return err
 	}
 
+	stats := Stats{Attack: 0, Defence: 0}
+
 	for {
 		received := make([]byte, 2048)
 
@@ -99,24 +112,36 @@ func (c *Client) StartClient() error {
 			}
 		case "ZONES":
 			parseZones(resp)
-			sel := SelectScreen()
+			sel := SelectScreen(zones)
 			conn.Write([]byte(fmt.Sprintf("%d", sel)))
 
 		case "SELITEM":
 			parseUpgrades(resp)
-			log.Println(zoneUpgrades)
+			if len(zoneStrings) == 0 {
+				fmt.Println("No upgrades in this zone")
+				break
+			}
+
+			up := SelectScreen(zoneStrings)
+			conn.Write([]byte(fmt.Sprintf("%d", up)))
+
+			stats.add(zoneUpgrades[up])
 
 		case "ERROR":
 			fmt.Println(resp.Message)
-
 		}
+
+		fmt.Printf("Attack: %d | Defence %d", stats.Attack, stats.Defence)
 	}
 	return nil
 }
 
 func parseUpgrades(resp ServerData) {
+	zoneStrings = make(map[int]string)
 	zoneUpgrades = make([]Upgrade, cap(zoneUpgrades))
-	for _, u := range resp.Upgrades {
+
+	for i, u := range resp.Upgrades {
+		zoneStrings[i] = fmt.Sprintf("+%d Attack | +%d Defence", u.Attack, u.Defence)
 		zoneUpgrades = append(zoneUpgrades, u)
 	}
 }

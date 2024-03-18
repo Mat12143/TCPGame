@@ -13,11 +13,32 @@ var inGameZones map[int]Zone
 var gameUsers []GameUser
 var wg sync.WaitGroup
 
-// func Fight(us []GameUser) {
-// 	for _, u := range us {
-//         // To be implemented
-// 	}
-// }
+func getUserByUsername(username string) (GameUser, int) {
+	for i, us := range gameUsers {
+		if us.user.username == username {
+			return us, i
+		}
+	}
+	return GameUser{}, 0
+}
+
+func shuffleSlice(us []string) []string {
+	for i := range us {
+		j := rand.Intn(i + 1)
+		us[i], us[j] = us[j], us[i]
+	}
+	return us
+}
+
+func Fight(usernames []string) {
+    for _, us := range usernames {
+        user, _ := getUserByUsername(us)
+        n, err := user.user.conn.Write(ServerCommunication{Status: "FIGHT", Message: "Fight to be implemented"}.ToJson())
+        if isConnDead(n, err) {
+            user.user.Disconnect()
+        }
+    }
+}
 
 func ProcessZone(i int) {
 	z := inGameZones[i]
@@ -25,18 +46,21 @@ func ProcessZone(i int) {
 	defer wg.Done()
 	defer func() {
 		// Reset zone users slice on zone processing end
-		z.users = []*GameUser{}
+		z.users = []string{}
 		inGameZones[i] = z
 	}()
 
 	if len(z.users) > 1 {
-		// Fight(z.users)
+		Fight(z.users)
 		return
 	}
-	n, err := z.users[0].user.conn.Write(ServerCommunication{Status: "SELITEM", Upgrades: z.upgrade}.ToJson())
+
+	user, id := getUserByUsername(z.users[0])
+
+	n, err := user.user.conn.Write(ServerCommunication{Status: "SELITEM", Upgrades: z.upgrade}.ToJson())
 
 	if isConnDead(n, err) {
-		z.users[0].user.Disconnect()
+		user.user.Disconnect()
 		return
 	}
 
@@ -47,17 +71,18 @@ func ProcessZone(i int) {
 
 	respBuf := make([]byte, 2048)
 
-	n, err = z.users[0].user.conn.Read(respBuf)
+	n, err = user.user.conn.Read(respBuf)
 
 	if isConnDead(n, err) {
-		z.users[0].user.Disconnect()
+		user.user.Disconnect()
 		return
 	}
 
 	upID := string(respBuf[:n])
 	ID, _ := strconv.Atoi(upID)
 
-	z.users[0].AddUpgrade(z.upgrade[ID])
+	user.AddUpgrade(z.upgrade[ID])
+	gameUsers[id] = user
 }
 
 func broadcast(bt []byte) {
@@ -74,9 +99,9 @@ func broadcast(bt []byte) {
 
 func checkForEnd() GameUser {
 	if len(gameUsers) <= 1 {
-        return gameUsers[0]
+		return gameUsers[0]
 	}
-    return GameUser{}
+	return GameUser{}
 }
 
 func generateZones() {
@@ -97,8 +122,9 @@ func waitForSel(gu GameUser, ch *chan (Selection)) {
 	selBuf := make([]byte, 2048)
 
 	n, err := gu.user.conn.Read(selBuf)
-	if err != nil {
-		log.Fatal(err)
+
+	if isConnDead(n, err) {
+		gu.user.Disconnect()
 		return
 	}
 	sel := string(selBuf[:n])
@@ -138,12 +164,11 @@ func StartLoop() {
 	generateZones()
 
 	for {
-        wu := checkForEnd()
-        log.Println(wu)
-        if wu.lifes != 0 {
-            broadcast(ServerCommunication{ Status: "WINNER", Winner: wu.user.username }.ToJson())
-            break
-        }
+		wu := checkForEnd()
+		if wu.lifes != 0 {
+			broadcast(ServerCommunication{Status: "WINNER", Winner: wu.user.username}.ToJson())
+			break
+		}
 
 		broadcast(ServerCommunication{Status: "ZONES", Zones: len(inGameZones)}.ToJson())
 
@@ -167,5 +192,9 @@ func StartLoop() {
 			go ProcessZone(i)
 		}
 		wg.Wait()
+		log.Println(gameUsers)
+
+        broadcast(ServerCommunication{Status: "TURN"}.ToJson())
+        time.Sleep(5 * time.Second)
 	}
 }

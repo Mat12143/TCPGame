@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
 	"strings"
 	"time"
 
@@ -85,5 +86,5 @@ func SelectScreen(i map[int]string) int {
 	if m, ok := m.(model); ok {
 		return m.choice
 	}
-	return 0
+	return rand.Intn(len(i))
 }

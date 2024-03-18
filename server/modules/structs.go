@@ -45,10 +45,10 @@ func (sc ServerCommunication) ToJson() []byte {
 	r, err := json.Marshal(sc)
 
 	if err != nil {
-		return []byte{} 
+		return []byte{}
 	}
 
-	return r 
+	return r
 }
 
 // Connected user
@@ -66,29 +66,37 @@ func (user User) Disconnect() {
 			break
 		}
 	}
-    for i, u := range gameUsers {
-        if u.user == user {
-            gameUsers = append(gameUsers[:i], gameUsers[i+1:]...)
-            break
-        }
-    }
-
+	for i, u := range gameUsers {
+		if u.user == user {
+			gameUsers = append(gameUsers[:i], gameUsers[i+1:]...)
+			break
+		}
+	}
+    // for z := range inGameZones {
+    //     for us := range inGameZones[z].users {
+    //         if user.username == inGameZones[z].users[us] {
+    //             inGameZones[z].users = append(inGameZones[z].users[:us], inGameZones[z].users[us+1:]...)
+    //         }
+    //     } 
+    // }
+    //
 	log.Println("User", user.username, "disconnected!")
 }
 
 // In-Game user
 type GameUser struct {
-	user     User
-	upgrades []Upgrade
-	lifes    int
+	user    User
+	lifes   int
+	attack  int
+	defence int
 }
 
 func (gu *GameUser) AddUpgrade(u Upgrade) {
-	gu.upgrades = append(gu.upgrades, u)
+	gu.attack += u.Attack
+	gu.defence += u.Defence
 }
 
 func (gu *GameUser) Die() {
-
 	for i, u := range gameUsers {
 		if &u == gu {
 			gameUsers = append(gameUsers[:i], gameUsers[i+1:]...)
@@ -97,8 +105,12 @@ func (gu *GameUser) Die() {
 	}
 }
 
-func (gu *GameUser) RemoveLife(points int) {
-	gu.lifes = gu.lifes - points
+func (gu *GameUser) RemoveLife() {
+	gu.attack = 0
+	gu.defence = 0
+
+	gu.lifes = gu.lifes - 1
+
 	if gu.lifes <= 0 {
 		gu.Die()
 	}
@@ -107,14 +119,14 @@ func (gu *GameUser) RemoveLife(points int) {
 func (gu *GameUser) AddToZone(zid int) {
 	entry, ok := inGameZones[zid]
 	if ok {
-		entry.users = append(entry.users, gu)
+		entry.users = append(entry.users, gu.user.username)
 		inGameZones[zid] = entry
 	}
 }
 
 // Game Zones
 type Zone struct {
-	users   []*GameUser
+	users   []string
 	upgrade []Upgrade
 }
 

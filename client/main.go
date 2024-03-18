@@ -129,9 +129,18 @@ func (c *Client) StartClient() error {
 
 		case "ERROR":
 			fmt.Println(resp.Message)
+			break
 		case "WINNER":
 			fmt.Printf("Game Ended! The winner is %s", resp.Winner)
+		case "FIGHT":
+			fmt.Printf("%s", resp.Message)
+		case "TURN":
+			for i := 0; i < 5; i++ {
+				fmt.Printf("Next turn in %d\n", 5-i)
+				time.Sleep(1 * time.Second)
+			}
 		}
+
 	}
 	return nil
 }
